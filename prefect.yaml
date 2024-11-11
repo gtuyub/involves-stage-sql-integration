@@ -15,9 +15,9 @@ push: null
 # pull section allows you to provide instructions for cloning this project in remote locations
 pull:
 - prefect.deployments.steps.git_clone:
+    id : clone-step
     repository: https://github.com/gtuyub/involves-stage-sql-integration.git
     branch: main
-    access_token: null
 - prefect.deployments.steps.pip_install_requirements:
    directory: "{{clone-step.directory}}"
    requirements_file: requirements.txt
@@ -32,7 +32,7 @@ deployments:
   flow_name:
   entrypoint: src/main.py:main
   parameters: {
-    config_block :  'config-involves-clinical'
+    config_block : 'config-involves-clinical'
   } 
   work_pool:
     name: dev
