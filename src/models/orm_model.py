@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 from .base import Base
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -55,7 +55,7 @@ class PointOfSale(Base):
     updated_at_millis = Column(BigInteger)
 
     @classmethod
-    def get_last_sync_time(cls, db: Session) -> str | int:
+    def get_last_sync_time(cls, db: Session) -> Union[str,int]:
         return super().get_last_sync_time(db)
     
     @classmethod
@@ -74,7 +74,7 @@ class Employee(Base):
     updated_at_millis = Column(BigInteger)
 
     @classmethod
-    def get_last_sync_time(cls, db: Session) -> str | int:
+    def get_last_sync_time(cls, db: Session) -> Union[str,int]:
         return super().get_last_sync_time(db)
     
     @classmethod
@@ -93,7 +93,7 @@ class Product(Base):
     updated_at_millis = Column(BigInteger)
 
     @classmethod
-    def get_last_sync_time(cls, db: Session) -> str | int:
+    def get_last_sync_time(cls, db: Session) -> Union[str,int]:
         return super().get_last_sync_time(db)
     
     @classmethod
@@ -113,7 +113,7 @@ class Form(Base):
     updated_at_millis = Column(BigInteger)
 
     @classmethod
-    def get_last_sync_time(cls, db: Session) -> str | int:
+    def get_last_sync_time(cls, db: Session) -> Union[str,int]:
         return super().get_last_sync_time(db)
     
     @classmethod
@@ -132,7 +132,7 @@ class FormField(Base):
     is_required = Column(Boolean)   
 
     @classmethod
-    def get_last_sync_time(cls, db: Session) -> str | int:
+    def get_last_sync_time(cls, db: Session) -> Union[str,int]:
         return super().get_last_sync_time(db)
     
     @classmethod
@@ -158,7 +158,7 @@ class FormResponse(Base):
     updated_at_millis = Column(BigInteger)
 
     @classmethod
-    def get_last_sync_time(cls, db: Session) -> str | int:
+    def get_last_sync_time(cls, db: Session) -> Union[str,int]:
         return super().get_last_sync_time(db)
     
     @classmethod
@@ -176,7 +176,7 @@ class EmployeeAbsence(Base):
     absence_note = Column(String)
 
     @classmethod
-    def get_last_sync_time(cls, db: Session) -> str | int:
+    def get_last_sync_time(cls, db: Session) -> Union[str,int]:
 
         millis = db.query(func.max(cls.updated_at_millis)).scalar()  
         if millis:      

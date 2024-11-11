@@ -1,7 +1,7 @@
 from sqlalchemy.orm import DeclarativeBaseNoMeta, Mapped, mapped_column, Session
 from sqlalchemy import func, insert, update
 from sqlalchemy.types import Integer, BigInteger
-from typing import List,Dict,Any
+from typing import List,Dict,Any, Union
 from abc import abstractmethod, ABC
 from api_client.involves_api_client import InvolvesAPIClient
 from .exceptions import InsertOperationError, UpdateOperationError
@@ -70,7 +70,7 @@ class Base(DeclarativeBaseNoMeta, ABC):
             
     @classmethod
     @abstractmethod
-    def get_last_sync_time(cls, db : Session)-> str | int:
+    def get_last_sync_time(cls, db : Session)-> Union[str,int]:
 
         last_sync = db.query(func.max(cls.updated_at_millis)).scalar()
         
