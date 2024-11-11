@@ -18,18 +18,38 @@ pull:
     repository: https://github.com/gtuyub/involves-stage-sql-integration.git
     branch: main
     access_token: null
+- prefect.deployments.steps.pip_install_requirements:
+   directory: "{{clone-step.directory}}"
+   requirements_file: requirements.txt
 
 # the deployments section allows you to provide configuration for deploying flows
 deployments:
-- name: null
+- name: actualizar-db-involves-clinical
   version: null
   tags: []
-  description: null
+  description: Este 'deployment' sincroniza las tablas SQL de la base involves con datos del entorno 5 en Involves Stage.
   schedule: {}
-  flow_name: null
-  entrypoint: null
-  parameters: {}
+  flow_name:
+  entrypoint: src/main.py:main
+  parameters: {
+    config_block :  'config-involves-clinical'
+  } 
   work_pool:
-    name: null
+    name: dev
+    work_queue_name: null
+    job_variables: {}
+
+- name: actualizar-db-involves-dkt
+  version: null
+  tags: []
+  description: Este 'deployment' sincroniza las tablas SQL de la base involves_dkt con datos del entorno 1 en Involves Stage.
+  schedule: {}
+  flow_name:
+  entrypoint: src/main.py:main
+  parameters: {
+    config_block :  'config-involves-dkt'
+  } 
+  work_pool:
+    name: dev
     work_queue_name: null
     job_variables: {}
