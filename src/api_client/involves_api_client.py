@@ -82,7 +82,7 @@ class InvolvesAPIClient(requests.Session):
                     else:
                         records.append(row)
 
-            if not millis or millis >= end_millis:
+            if not millis or (end_millis is not None and millis >= end_millis):
                 logger.info(f'timestampLastItem not found in response or end millis reached, paginated request finished with a total of {len(records)} items.')
                 break
 
