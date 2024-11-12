@@ -31,7 +31,7 @@ class Visit(Base):
         
     @classmethod    
     def get_records_to_sync(cls, api_client : InvolvesAPIClient, db: Session) -> List[Dict[str, Any]]:
-        return api_client.get_updated_visits(millis=cls.get_last_sync_time(db))
+        return api_client.get_updated_visits(start_millis=cls.get_last_sync_time(db))
 
 
 class PointOfSale(Base):
@@ -60,7 +60,7 @@ class PointOfSale(Base):
     
     @classmethod
     def get_records_to_sync(cls,api_client : InvolvesAPIClient, db: Session) -> List[Dict[str, Any]]:
-        return api_client.get_updated_points_of_sale(millis=cls.get_last_sync_time(db))
+        return api_client.get_updated_points_of_sale(start_millis=cls.get_last_sync_time(db))
 
 class Employee(Base):
     __tablename__ = "employee"
@@ -98,7 +98,7 @@ class Product(Base):
     
     @classmethod
     def get_records_to_sync(cls, api_client: InvolvesAPIClient, db: Session) -> List[Dict[str, Any]]:
-        return api_client.get_updated_products(millis=cls.get_last_sync_time(db))
+        return api_client.get_updated_products(start_millis=cls.get_last_sync_time(db))
 
 
 class Form(Base):
@@ -163,7 +163,7 @@ class FormResponse(Base):
     
     @classmethod
     def get_records_to_sync(cls, api_client: InvolvesAPIClient, db: Session) -> List[Dict[str, Any]]:
-        return api_client.get_updated_form_responses(millis = cls.get_last_sync_time(db))
+        return api_client.get_updated_form_responses(start_millis = cls.get_last_sync_time(db))
 
 
 class EmployeeAbsence(Base):
