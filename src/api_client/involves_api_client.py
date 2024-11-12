@@ -9,9 +9,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class InvolvesAPIClient(requests.Session):
+    """A client for interacting with the Involves Stage API."""
 
     def __init__(self,environment,domain,username,password):
-
+        """Initializes the API client with basic authentication."""
         super().__init__()
 
         self.environment = environment
@@ -29,8 +30,20 @@ class InvolvesAPIClient(requests.Session):
         logger.info(f'initialized involves_api_client at: \n env : {self.environment}. \n domain : {self.domain}.')
 
 
-    def _paginated_request_with_timestamp(self, url : str, millis : Optional[int], params : Dict[str,Any] = None, fetch_func : Callable[[Dict[str,Any]], Union[T,List[T]]] = None) -> List[T]:
+    def _paginated_request_with_timestamp(self, url : str, start_millis : Optional[int], end_millis : Optional[int], params : Dict[str,Any] = None, fetch_func : Callable[[Dict[str,Any]], Union[T,List[T]]] = None) -> List[T]:
+        """
+        Get records modified or created on a specific interval in milliseconds from the provided API URL.
 
+        Parameters:
+            url (str): The base URL for the API endpoint.
+            start_millis (Optional[int]): The starting timestamp in milliseconds to use as a parameter. If not provided defaults to 0.
+            end_millis (Optional[int]): The ending timestamp in milliseconds to use as a parameter. If not provided the method returns all records modified after start_millis.
+            params (Dict[str, Any], optional): Additional parameters to include in the request.
+            fetch_func (Callable[[Dict[str, Any]], Union[T, List[T]]], optional): A function to transform each dict from the API response data into the desired format.
+
+        Returns:
+            List[T]: A list of records created or modified after start_millis and before end_millis.
+        """
         records = []
 
         if not fetch_func:
@@ -42,10 +55,12 @@ class InvolvesAPIClient(requests.Session):
 
         if params:
             default_params.update(params)
+
+        millis = start_millis
         
         while True:
 
-            request_url = f'{url}{millis if millis else 0}'
+            request_url = f'{url}/{millis if millis else 0}'
             response = super().request(method='GET',url=request_url,headers=self.headers,auth=self.auth, params=default_params)
             logger.info(f'GET request at URL : \n {request_url}. \n status_code = {response.status_code}')
 
@@ -67,13 +82,24 @@ class InvolvesAPIClient(requests.Session):
                     else:
                         records.append(row)
 
-            if not millis:
-                logger.info(f'timestampLastItem not found in response, paginated request finished with a total of {len(records)} items.')
+            if not millis or millis >= end_millis:
+                logger.info(f'timestampLastItem not found in response or end millis reached, paginated request finished with a total of {len(records)} items.')
                 break
 
         return records
     
     def _paginated_request_with_page(self, url : str, params : Dict[str,Any], fetch_func : Callable[[Dict[str,Any]], Union[T,List[T]]] = None) -> List[T]:
+        """
+        Get records from the provided API URL with pagination.
+
+        Parameters:
+            url (str): The base URL for the API endpoint.
+            params (Dict[str, Any], optional): Additional parameters to include in the request.
+            fetch_func (Callable[[Dict[str, Any]], Union[T, List[T]]], optional): A function to transform each dict from the API response data into the desired format.
+
+        Returns:
+            List[T]: A list of records obtained from the URL.
+        """
 
         records = []
         page = 1
@@ -122,12 +148,23 @@ class InvolvesAPIClient(requests.Session):
         return records
 
 
-    def get_updated_visits(self, millis : Optional[int] = None) -> List[Dict[str,Any]]:
+    def get_updated_visits(self, start_millis : Optional[int] = None, end_millis : Optional[int] = None ) -> List[Dict[str,Any]]:
+        """
+        Get visits updated after start_millis and before end_millis 
+
+        Parameters:
+            start_millis (Optional[int]): The starting timestamp in milliseconds to use as a parameter. If not provided returns all records.
+            end_millis (Optional[int]): The ending timestamp in milliseconds to use as a parameter. If not provided the method returns all records modified after start_millis.
+
+        Returns:
+            List[T]: A list of dictionaries representing visits.
+        """
 
         request_url = f'{self.base_url}/v1/{self.environment}/visit/sync/timestamp/'
         return self._paginated_request_with_timestamp(
                 url=request_url,
-                millis=millis,
+                start_millis = start_millis,
+                end_millis = end_millis,             
                 fetch_func= lambda x : {
                         'id' : x.get('id'),
                         'employee_id' : x.get('employee',{}).get('id') if isinstance(x.get('employee',{}),dict) else None,
@@ -146,13 +183,23 @@ class InvolvesAPIClient(requests.Session):
             }
             )
     
-    def get_updated_points_of_sale(self, millis : int) -> List[Dict[str,Any]]:
+    def get_updated_points_of_sale(self, start_millis : Optional[int] = None, end_millis : Optional[int] = None) -> List[Dict[str,Any]]:
+        """
+        Get points of sale updated after start_millis and before end_millis 
 
+        Parameters:
+            start_millis (Optional[int]): The starting timestamp in milliseconds to use as a parameter. If not provided returns all records.
+            end_millis (Optional[int]): The ending timestamp in milliseconds to use as a parameter. If not provided the method returns all records modified after start_millis.
+
+        Returns:
+            List[T]: A list of dictionaries representing points of sale.
+        """
         request_url = f'{self.base_url}/v1/{self.environment}/pointofsale/sync/timestamp/'
         update_timestamp = round(time.time()*1000)
         return self._paginated_request_with_timestamp(
                 url=request_url,
-                millis=millis,
+                start_millis = start_millis,
+                end_millis = end_millis,
                 fetch_func = lambda x :  {
 
                         'id' : x.get('id'),
@@ -171,13 +218,21 @@ class InvolvesAPIClient(requests.Session):
                         'zip_code' : x.get('address',{}).get('zipCode') if isinstance(x.get('address',{}),dict) else None,
                         'is_enabled' : x.get('enabled'),
                         'is_deleted' : x.get('deleted'),
-                        'updated_at_millis' : update_timestamp,
+                        'updated_at_millis' : update_timestamp
                     }
                     )
 
     
     def get_updated_employees(self,millis : Optional[int] = None) ->List[Dict[str,Any]]:
+        """
+        Get employees updated after millis.
 
+        Parameters:
+            millis (Optional[int]): The starting timestamp in milliseconds to use as a parameter. If not provided returns all records.
+
+        Returns:
+            List[T]: A list of dictionaries representing employees.
+        """
         request_url = f'{self.base_url}/v1/{self.environment}/employeeenvironment/'
         params = {'updatedAtMillis' : millis} if millis else None
 
@@ -197,12 +252,23 @@ class InvolvesAPIClient(requests.Session):
                         }
                     )
 
-    def get_updated_products(self, millis : int) -> List[Dict[str,Any]]:
+    def get_updated_products(self, start_millis : Optional[int], end_millis : Optional[int]) -> List[Dict[str,Any]]:
+        """
+        Get products updated after start_millis and before end_millis 
+
+        Parameters:
+            start_millis (Optional[int]): The starting timestamp in milliseconds to use as a parameter. If not provided returns all records.
+            end_millis (Optional[int]): The ending timestamp in milliseconds to use as a parameter. If not provided the method returns all records modified after start_millis.
+
+        Returns:
+            List[T]: A list of dictionaries representing products.
+        """
 
         request_url = f'{self.base_url}/v1/{self.environment}/sku/sync/timestamp/'
         return self._paginated_request_with_timestamp(
                 url=request_url,
-                millis=millis,
+                start_millis = start_millis,
+                end_millis = end_millis,
                 fetch_func= lambda x : {
 
                         'id' : x.get('id'),
@@ -216,12 +282,21 @@ class InvolvesAPIClient(requests.Session):
             )
 
     
-    def get_updated_forms(self, millis : int) -> Dict[str,List[Dict[str,Any]]]:
+    def get_updated_forms(self, millis : Optional[int]) -> Dict[str,List[Dict[str,Any]]]:
+        """
+        Get forms updated after millis.
+
+        Parameters:
+            millis (Optional[int]): The starting timestamp in milliseconds to use as a parameter. If not provided returns all records.
+
+        Returns:
+            List[T]: A list of dictionaries representing forms.
+        """
 
         request_url = f'{self.base_url}/v1/{self.environment}/form/sync/timestamp/'
         return self._paginated_request_with_timestamp(
                 url=request_url,
-                millis=millis,
+                start_millis=millis,
                 fetch_func= lambda x : {
                         'id' : x.get('id'),
                         'form_name' : x.get('name'),
@@ -236,6 +311,15 @@ class InvolvesAPIClient(requests.Session):
             )
     
     def get_updated_form_fields(self, millis: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get form fields updated after millis.
+
+        Parameters:
+            millis (Optional[int]): The starting timestamp in milliseconds to use as a parameter. If not provided returns all records.
+
+        Returns:
+            List[T]: A list of dictionaries representing form fields.
+        """
 
         request_url = f'{self.base_url}/v1/{self.environment}/form/sync/timestamp/'
         def fetch_func(form_data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -256,11 +340,22 @@ class InvolvesAPIClient(requests.Session):
     
         return self._paginated_request_with_timestamp(
             url=request_url,
-            millis=millis,
+            start_millis=millis,
             fetch_func=fetch_func
         )
     
-    def get_updated_form_responses(self, millis: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_updated_form_responses(self, start_millis: Optional[int] = None, end_millis: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get form responses updated after start_millis and before end_millis.
+
+        Parameters:
+            start_millis (Optional[int]): The starting timestamp in milliseconds to use as a parameter. If not provided returns all records.
+            end_millis (Optional[int]): The ending timestamp in milliseconds to use as a parameter. If not provided returns all records.
+
+
+        Returns:
+            List[T]: A list of dictionaries representing form responses.
+        """
 
         request_url = f'{self.base_url}/v1/{self.environment}/survey/sync/timestamp/'
         
@@ -287,11 +382,21 @@ class InvolvesAPIClient(requests.Session):
 
         return self._paginated_request_with_timestamp(
             url=request_url,
-            millis=millis,
+            start_millis=start_millis,
+            end_millis=end_millis,
             fetch_func=fetch_func
         )
     
     def get_employee_absences(self, start_date : Optional[str] = None) -> List[Dict[str,Any]]:
+        """
+        Get employee absences valid from start_date.
+
+        Parameters:
+            start_date (Optional[str]): The starting date as string in format 'YYYY-mm-dd'.
+
+        Returns:
+            List[T]: A list of dictionaries representing absences.
+        """
 
         request_url = f'{self.base_url}/v1/{self.environment}/employeeabsence/'
         update_timestamp = round(time.time()*1000)
