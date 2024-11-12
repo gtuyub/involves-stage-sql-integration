@@ -41,31 +41,31 @@ class Base(DeclarativeBaseNoMeta, ABC):
             except Exception as e:
                 raise UpdateOperationError(f'Ocurrio un error al intentar realizar la operacion de actualizacion en la tabla {cls.__tablename__}: \n {e}')
             
-    @classmethod
-    def classify_records(cls, records : List[Dict[str,str]], db : Session)-> Dict[str,List[Dict[str,str]]]:
-
+    @classmethod        
+    def classify_records(cls, records: List[Dict[str, str]], db: Session, batch_size: int = 1000) -> Dict[str, List[Dict[str, str]]]:
         new_records = []
         modified_records = []
 
         primary_key = 'id'
-
         ids = [rec[primary_key] for rec in records]
-        existing_records = db.query(cls.id).filter(cls.id.in_(ids)).all()
-        existing_records_ids = {r.id for r in existing_records}
+
+        existing_records_ids = set()
+        
+        for i in range(0, len(ids), batch_size):
+            batch_ids = ids[i:i + batch_size]
+            existing_records = db.query(cls.id).filter(cls.id.in_(batch_ids)).all()
+            existing_records_ids.update({r.id for r in existing_records})
 
         for rec in records:
             if rec[primary_key] in existing_records_ids:
                 modified_records.append(rec)
-
             else:
                 new_records.append(rec)
 
         return {
-
-            'to_insert' : new_records,
-            'to_update' : modified_records
+            'to_insert': new_records,
+            'to_update': modified_records
         }
-
             
             
     @classmethod
