@@ -7,6 +7,7 @@ T = TypeVar('T')
 
 logging.basicConfig(level=logging.INFO)  
 logger = logging.getLogger(__name__)
+logger.propagate = True
 
 class InvolvesAPIClient(requests.Session):
     """A client for interacting with the Involves Stage API."""
@@ -60,7 +61,7 @@ class InvolvesAPIClient(requests.Session):
         
         while True:
 
-            request_url = f'{url}/{millis if millis else 0}'
+            request_url = f'{url}{millis if millis else 0}'
             response = super().request(method='GET',url=request_url,headers=self.headers,auth=self.auth, params=default_params)
             logger.info(f'GET request at URL : \n {request_url}. \n status_code = {response.status_code}')
 
