@@ -8,6 +8,7 @@ import inspect
 logger = logging.getLogger(__name__)
 
 def create_db_engine(server : str, database : str, username : str, password : str) -> Engine:
+    """crea la conexion a la bd sql con el engine sqlalchemy"""
 
     connection_url = f"mssql+pyodbc://{username}:{password}@{server}/{database}?driver=ODBC+Driver+17+for+SQL+Server"
     engine = create_engine(connection_url)
@@ -23,7 +24,6 @@ def create_db_engine(server : str, database : str, username : str, password : st
 
 def get_models_to_sync(env : int):
     """devuelve una lista con los modelos a actualizar de acuerdo al numero de ambiente en involves."""
-
 
     models_module = importlib.import_module('.orm_model',package='models')
 
