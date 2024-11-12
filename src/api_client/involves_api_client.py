@@ -1,8 +1,12 @@
 import requests
 from requests.auth import HTTPBasicAuth
 import time
-from typing import Optional, List, Dict, Any
 import logging
+from typing import Optional, List, Dict, Any, Callable, Union, TypeVar
+T = TypeVar('T')
+
+logging.basicConfig(level=logging.INFO)  
+logger = logging.getLogger(__name__)
 
 class InvolvesAPIClient(requests.Session):
 
@@ -13,7 +17,8 @@ class InvolvesAPIClient(requests.Session):
         self.environment = environment
         self.username = username
         self.password = password
-        self.base_url = f"https://{domain}.involves.com/webservices/api"
+        self.domain = domain
+        self.base_url = f"https://{self.domain}.involves.com/webservices/api"
         self.auth = HTTPBasicAuth(self.username,self.password)
 
         self.headers.update({
@@ -21,321 +26,288 @@ class InvolvesAPIClient(requests.Session):
             'Accept-Version' : '2020-02-26'
         })
 
-    def get_updated_visits(self, millis : int) -> List[Dict[str,Any]]:
+        logger.info(f'initialized involves_api_client at: \n env : {self.environment}. \n domain : {self.domain}.')
+
+
+    def _paginated_request_with_timestamp(self, url : str, millis : Optional[int], params : Dict[str,Any] = None, fetch_func : Callable[[Dict[str,Any]], Union[T,List[T]]] = None) -> List[T]:
 
         records = []
 
+        if not fetch_func:
+            fetch_func = lambda x : x
+
+        default_params = {
+            'size' : 100
+        }
+
+        if params:
+            default_params.update(params)
+        
         while True:
 
-            request_url = f'{self.base_url}/v1/{self.environment}/visit/sync/timestamp/{millis}?count=true'
+            request_url = f'{url}{millis if millis else 0}'
+            response = super().request(method='GET',url=request_url,headers=self.headers,auth=self.auth, params=default_params)
+            logger.info(f'GET request at URL : \n {request_url}. \n status_code = {response.status_code}')
 
-            response = super().request(method='GET',url=request_url,headers=self.headers,auth=self.auth)
-            response.raise_for_status() 
+            response.raise_for_status()
 
-            items = response.json().get('items')
-            millis = response.json().get('timestampLastItem')
+            response_data : Dict = response.json()
+            
+            items = response_data.get('items')
+            millis = response_data.get('timestampLastItem')
+            logger.info(f'timestamp of next request : {millis}')
 
             if items:
-                for d in items:
-                    row = {
+                logger.info(f'request response includes {len(items)} items.')
+                for item in items:
+                    row = fetch_func(item)
 
-                        'id' : d.get('id'),
-                        'employee_id' : d.get('employee').get('id') if isinstance(d.get('employee'),dict) else None,
-                        'point_of_sale_id' : d.get('pointOfSale').get('id') if isinstance(d.get('pointOfSale'),dict) else None,
-                        'visit_date' : d.get('visitDate'),
-                        'visit_type' : d.get('type'),
-                        'visit_status' : d.get('status'),
-                        'manual_entry_date' : d.get('entryDateManualCheckin'),
-                        'manual_exit_date' :  d.get('exitDateManualCheckin'),
-                        'gps_entry_date' : d.get('entryDateGPSCheckin'),
-                        'gps_exit_date' : d.get('exitDateGPSCheckin'),
-                        'visit_duration_manual' : d.get('visitDurationCheckinManual'),
-                        'visit_duration_gps' : d.get('visitDurationCheckinGPS'),
-                        'updated_at_millis' : d.get('updatedAtMillis'),
-                        'is_deleted' : d.get('deleted')  
-                        }
-                    
-                    records.append(row)
+                    if isinstance(row,list):
+                        records.extend(row)
+                    else:
+                        records.append(row)
 
             if not millis:
+                logger.info(f'timestampLastItem not found in response, paginated request finished with a total of {len(records)} items.')
                 break
 
         return records
+    
+    def _paginated_request_with_page(self, url : str, params : Dict[str,Any], fetch_func : Callable[[Dict[str,Any]], Union[T,List[T]]] = None) -> List[T]:
+
+        records = []
+        page = 1
+        if not fetch_func:
+            fetch_func = lambda x : x
+        
+        default_params = {
+            'size' : 200,
+            'page' : page
+        }
+
+        if params:
+            default_params.update(params)
+
+        while True:         
+
+            response = super().request(method='GET',url=url,headers=self.headers,auth=self.auth, params=default_params)
+            logger.info(f'GET request at URL : \n {url}. \n status_code = {response.status_code}')
+
+            response.raise_for_status()
+
+            response_data : Dict = response.json()
+
+            items = response_data.get('items')
+            logger.info(f'request response includes {len(items)} items.')
+
+            total_pages = response_data.get('totalPages')
+            logger.info(f'page progress : {page}/{total_pages}')
+
+            if items:
+                for item in items:
+                    row = fetch_func(item)
+
+                    if isinstance(row,list):
+                        records.extend(row)
+                    else:
+                        records.append(row)
+
+            if page >= total_pages:
+                logger.info(f'Paginated request finished with a total of {len(records)} items.')
+                break
+
+            page +=1  
+            default_params.update({'page':page}) 
+
+        return records
+
+
+    def get_updated_visits(self, millis : Optional[int] = None) -> List[Dict[str,Any]]:
+
+        request_url = f'{self.base_url}/v1/{self.environment}/visit/sync/timestamp/'
+        return self._paginated_request_with_timestamp(
+                url=request_url,
+                millis=millis,
+                fetch_func= lambda x : {
+                        'id' : x.get('id'),
+                        'employee_id' : x.get('employee',{}).get('id') if isinstance(x.get('employee',{}),dict) else None,
+                        'point_of_sale_id' : x.get('pointOfSale',{}).get('id') if isinstance(x.get('pointOfSale',{}),dict) else None,
+                        'visit_date' : x.get('visitDate'),
+                        'visit_type' : x.get('type'),
+                        'visit_status' : x.get('status'),
+                        'manual_entry_date' : x.get('entryDateManualCheckin'),
+                        'manual_exit_date' :  x.get('exitDateManualCheckin'),
+                        'gps_entry_date' : x.get('entryDateGPSCheckin'),
+                        'gps_exit_date' : x.get('exitDateGPSCheckin'),
+                        'visit_duration_manual' : x.get('visitDurationCheckinManual'),
+                        'visit_duration_gps' : x.get('visitDurationCheckinGPS'),
+                        'updated_at_millis' : x.get('updatedAtMillis'),
+                        'is_deleted' : x.get('deleted')  
+            }
+            )
     
     def get_updated_points_of_sale(self, millis : int) -> List[Dict[str,Any]]:
 
-        records = []
+        request_url = f'{self.base_url}/v1/{self.environment}/pointofsale/sync/timestamp/'
+        update_timestamp = round(time.time()*1000)
+        return self._paginated_request_with_timestamp(
+                url=request_url,
+                millis=millis,
+                fetch_func = lambda x :  {
 
-        while True:
-
-            request_url = f'{self.base_url}/v1/{self.environment}/pointofsale/sync/timestamp/{millis}?count=true'
-
-            response = super().request(method='GET',url=request_url,headers=self.headers,auth=self.auth)
-            response.raise_for_status()
-
-            items = response.json().get('items')
-            millis = response.json().get('timestampLastItem')
-            update_timestamp = round(time.time()*1000)
-
-            if items:
-                for d in items:
-                    row = {
-
-                        'id' : d.get('id'),
-                        'point_of_sale_base_id' : d.get('pointOfSaleBaseId'),
-                        'point_of_sale_name' : d.get('name'),
-                        'chain' : d.get('chain').get('name') if isinstance(d.get('chain'),dict) else None,
-                        'chain_group' : d.get('chain').get('chainGroup').get('name') if isinstance(d.get('chain'),dict) and isinstance(d.get('chain').get('chainGroup'),dict) else None,
-                        'channel' : d.get('pointOfSaleChannel').get('name') if isinstance(d.get('pointOfSaleChannel'),dict) else None,
-                        'point_of_sale_code' : d.get('code'),
-                        'point_of_sale_region' : d.get('region').get('name') if isinstance(d.get('region'),dict) else None,
-                        'macro_region' : d.get('region').get('macroRegion').get('name') if isinstance(d.get('region'),dict) and isinstance(d.get('region').get('macroRegion'),dict) else None,
-                        'point_of_sale_type' : d.get('pointOfSaleType').get('name') if isinstance(d.get('pointOfSaleType'),dict) else None, 
-                        'point_of_sale_profile' : d.get('pointOfSaleProfile').get('name') if isinstance(d.get('pointOfSaleProfile'),dict) else None,
-                        'latitude' : d.get('address').get('latitude') if isinstance(d.get('address'),dict) else None,
-                        'longitude' : d.get('address').get('longitude') if isinstance(d.get('address'),dict) else None,
-                        'zip_code' : d.get('address').get('zipCode') if isinstance(d.get('address'),dict) else None,
-                        'is_enabled' : d.get('enabled'),
-                        'is_deleted' : d.get('deleted'),
+                        'id' : x.get('id'),
+                        'point_of_sale_base_id' : x.get('pointOfSaleBaseId'),
+                        'point_of_sale_name' : x.get('name'),
+                        'chain' : x.get('chain',{}).get('name') if isinstance(x.get('chain',{}),dict) else None,
+                        'chain_group' : x.get('chain',{}).get('chainGroup',{}).get('name') if isinstance(x.get('chain',{}),dict) else None,
+                        'channel' : x.get('pointOfSaleChannel',{}).get('name') if isinstance(x.get('pointOfSaleChannel',{}),dict) else None,
+                        'point_of_sale_code' : x.get('code'),
+                        'point_of_sale_region' : x.get('region',{}).get('name') if isinstance(x.get('region',{}),dict) else None,
+                        'macro_region' : x.get('region',{}).get('macroRegion',{}).get('name') if isinstance(x.get('region',{}),dict) else None,
+                        'point_of_sale_type' : x.get('pointOfSaleType',{}).get('name') if isinstance(x.get('pointOfSaleType',{}),dict) else None, 
+                        'point_of_sale_profile' : x.get('pointOfSaleProfile',{}).get('name') if isinstance(x.get('pointOfSaleProfile'),dict) else None,
+                        'latitude' : x.get('address',{}).get('latitude') if isinstance(x.get('address',{}),dict) else None,
+                        'longitude' : x.get('address',{}).get('longitude') if isinstance(x.get('address',{}),dict) else None,
+                        'zip_code' : x.get('address',{}).get('zipCode') if isinstance(x.get('address',{}),dict) else None,
+                        'is_enabled' : x.get('enabled'),
+                        'is_deleted' : x.get('deleted'),
                         'updated_at_millis' : update_timestamp,
-
-
                     }
+                    )
 
-                    records.append(row)
-            
-            if not millis:
-                break
-        
-        return records
     
-    def get_updated_employees(self,millis : int) ->List[Dict[str,Any]]:
+    def get_updated_employees(self,millis : Optional[int] = None) ->List[Dict[str,Any]]:
 
-        records = []
-        page = 1
+        request_url = f'{self.base_url}/v1/{self.environment}/employeeenvironment/'
+        params = {'updatedAtMillis' : millis} if millis else None
 
-        while True:         
+        return self._paginated_request_with_page(
+                url=request_url,
+                params = params,
+                fetch_func = lambda x : {
 
-            request_url = f'{self.base_url}/v1/{self.environment}/employeeenvironment?updatedAtMillis={millis}&page={page}&size=200'
-
-            response = super().request(method='GET',url=request_url,headers=self.headers,auth=self.auth)
-            response.raise_for_status()
-
-            items = response.json().get('items')
-            total_pages = response.json().get('totalPages')
-
-            if items:
-                for d in items:
-                    row = {
-
-                        'id' : d.get('id'),
-                        'employee_name' : d.get('name'),
-                        'employee_code' : d.get('nationalIdCard2'),
-                        'is_field_team' : d.get('fieldTeam'),
-                        'user_group' : d.get('userGroup').get('name') if isinstance(d.get('userGroup'),dict) else None,
-                        'leader_name' : d.get('employeeEnvironmentLeader').get('name') if isinstance(d.get('employeeEnvironmentLeader'),dict) else None,
-                        'is_enabled' : d.get('enabled'),
-                        'updated_at_millis' : d.get('userUpdatedAtMillis')
+                        'id' : x.get('id'),
+                        'employee_name' : x.get('name'),
+                        'employee_code' : x.get('nationalIdCard2'),
+                        'is_field_team' : x.get('fieldTeam'),
+                        'user_group' : x.get('userGroup',{}).get('name') if isinstance(x.get('userGroup',{}),dict) else None,
+                        'leader_name' : x.get('employeeEnvironmentLeader',{}).get('name') if isinstance(x.get('employeeEnvironmentLeader',{}),dict) else None,
+                        'is_enabled' : x.get('enabled'),
+                        'updated_at_millis' : x.get('userUpdatedAtMillis')
                         }
-                    
-                    records.append(row)
-
-            if page >= total_pages:
-                break
-
-            page +=1    
-
-        return records
+                    )
 
     def get_updated_products(self, millis : int) -> List[Dict[str,Any]]:
 
-        records = []
+        request_url = f'{self.base_url}/v1/{self.environment}/sku/sync/timestamp/'
+        return self._paginated_request_with_timestamp(
+                url=request_url,
+                millis=millis,
+                fetch_func= lambda x : {
 
-        while True:
-
-            request_url = f'{self.base_url}/v1/{self.environment}/sku/sync/timestamp/{millis}?count=true'
-
-            response = super().request(method='GET',url=request_url,headers=self.headers,auth=self.auth)
-            response.raise_for_status()
-
-            items = response.json().get('items')
-            millis = response.json().get('timestampLastItem')
-
-            if items:
-                for d in items:
-                    row = {
-
-                        'id' : d.get('id'),
-                        'product_name' : d.get('name'),
-                        'bar_code' : d.get('barCode'),
-                        'product_line' : d.get('productLine').get('name') if isinstance(d.get('productLine'),dict) else None,
-                        'is_active' : d.get('active'),
-                        'is_deleted' : d.get('deleted'),
-                        'updated_at_millis' : d.get('updatedAtMillis')
+                        'id' : x.get('id'),
+                        'product_name' : x.get('name'),
+                        'bar_code' : x.get('barCode'),
+                        'product_line' : x.get('productLine',{}).get('name') if isinstance(x.get('productLine',{}),dict) else None,
+                        'is_active' : x.get('active'),
+                        'is_deleted' : x.get('deleted'),
+                        'updated_at_millis' : x.get('updatedAtMillis')
                     }
+            )
 
-                    records.append(row)
-            
-            if not millis:
-                break
-        
-        return records
     
     def get_updated_forms(self, millis : int) -> Dict[str,List[Dict[str,Any]]]:
 
-        records = []
-
-        while True:
-
-            request_url = f'{self.base_url}/v1/{self.environment}/form/sync/timestamp/{millis}?count=true'
-
-            response = super().request(method='GET',url=request_url,headers=self.headers,auth=self.auth)
-            response.raise_for_status()
-
-            forms = response.json().get('items')
-            millis = response.json().get('timestampLastItem')
-
-            if forms:
-                for d in forms:
-
-                    row = {
-                        'id' : d.get('id'),
-                        'form_name' : d.get('name'),
-                        'is_active' : d.get('active'),
-                        'is_deleted' : d.get('deleted'),
-                        'form_purpose' : d.get('formPurpose'),
-                        'requires_check_in' : d.get('checkinRequired'),
-                        'requires_point_of_sale' : d.get('pointOfSaleRequired'),
-                        'updated_at_millis' : d.get('updatedAtMillis')
+        request_url = f'{self.base_url}/v1/{self.environment}/form/sync/timestamp/'
+        return self._paginated_request_with_timestamp(
+                url=request_url,
+                millis=millis,
+                fetch_func= lambda x : {
+                        'id' : x.get('id'),
+                        'form_name' : x.get('name'),
+                        'is_active' : x.get('active'),
+                        'is_deleted' : x.get('deleted'),
+                        'form_purpose' : x.get('formPurpose'),
+                        'requires_check_in' : x.get('checkinRequired'),
+                        'requires_point_of_sale' : x.get('pointOfSaleRequired'),
+                        'updated_at_millis' : x.get('updatedAtMillis')
 
                     }
-
-                    records.append(row)               
-
-            if not millis:
-                break
-
-        return records
+            )
     
-    def get_updated_form_fields(self, millis : int) -> List[Dict[str,Any]]:
+    def get_updated_form_fields(self, millis: Optional[int] = None) -> List[Dict[str, Any]]:
 
-        records = []
+        request_url = f'{self.base_url}/v1/{self.environment}/form/sync/timestamp/'
+        def fetch_func(form_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+            field_records = []
+            for field in form_data.get('formFields', []):
+                field_row = {
+                    'id': field.get('id'),
+                    'form_id': form_data.get('id'),
+                    'field_name': field.get('information', {}).get('label') if isinstance(field.get('information', {}),dict) else None,
+                    'field_description': field.get('information', {}).get('alternativeLabel') if isinstance(field.get('information', {}),dict) else None,
+                    'field_order': field.get('order'),
+                    'is_deleted': field.get('deleted'),
+                    'is_required': field.get('required'),
+                    'updated_at_millis': form_data.get('updatedAtMillis')
+                }
+                field_records.append(field_row)
+            return field_records
+    
+        return self._paginated_request_with_timestamp(
+            url=request_url,
+            millis=millis,
+            fetch_func=fetch_func
+        )
+    
+    def get_updated_form_responses(self, millis: Optional[int] = None) -> List[Dict[str, Any]]:
 
-        while True:
-
-            request_url = f'{self.base_url}/v1/{self.environment}/form/sync/timestamp/{millis}?count=true'
-
-            response = super().request(method='GET',url=request_url,headers=self.headers,auth=self.auth)
-            response.raise_for_status()
-
-            forms = response.json().get('items')
-            millis = response.json().get('timestampLastItem')
-
-            if forms:
-                for d in forms:
-                    for field in d.get('formFields'):
-
-                        field_row = {
-                            'id' : field.get('id'),
-                            'form_id' : d.get('id'),
-                            'field_name' : field.get('information').get('label') if isinstance(field.get('information'),dict) else None,
-                            'field_description' : field.get('information').get('alternativeLabel') if isinstance(field.get('information'),dict) else None,
-                            'field_order' : field.get('order'),
-                            'is_deleted' : field.get('deleted'),
-                            'is_required' : field.get('required'),
-                            'updated_at_millis' : d.get('updatedAtMillis')
-                        }
-
-                        records.append(field_row)
-
-
-            if not millis:
-                break
-
-        return records
-
-
-    def get_updated_form_responses(self, millis : int)-> List[Dict[str,Any]]:
-
-        records = []
-
-        while True:
-
-            request_url = f'{self.base_url}/v1/{self.environment}/survey/sync/timestamp/{millis}?count=true'
-
-            response = super().request(method='GET',url=request_url,headers=self.headers,auth=self.auth)
-            response.raise_for_status()
-
-            items = response.json().get('items')
-            millis = response.json().get('timestampLastItem')
-
-            if items:
-                for d in items:
-                    for answer in d.get('surveyData'):
-
-                        row = {
-
-                        'id' : answer.get('id'),
-                        'item_id' : d.get('id'),
-                        'replied_at' : d.get('repliedAt'),
-                        'response_status' : d.get('status'),
-                        'time_spent' : d.get('timeSpent'),
-                        'form_id' : d.get('form').get('id') if isinstance(d.get('form'),dict) else None,
-                        'form_field_id' : answer.get('formField').get('id') if isinstance(answer.get('formField'),dict) else None,
-                        'employee_id' : d.get('assignedTo').get('id') if isinstance(d.get('assignedTo'),dict) else None,
-                        'point_of_sale_id' : d.get('pointOfSale').get('id') if isinstance(d.get('pointOfSale'),dict) else None,
-                        'product_id' : answer.get('sku').get('id') if isinstance(answer.get('sku'),dict) else None,
-                        'response_value' : answer.get('value'),
-                        'is_deleted' : d.get('deleted'),
-                        'updated_at_millis' : d.get('updatedAtMillis')
-                            
-                        }
-
-                        records.append(row)
-            
-            if not millis:
-                break
+        request_url = f'{self.base_url}/v1/{self.environment}/survey/sync/timestamp/'
         
-        return records
+        def fetch_func(survey_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+            response_records = []
+            for answer in survey_data.get('surveyData'):
+                row = {
+                    'id': answer.get('id'),
+                    'item_id': survey_data.get('id'),
+                    'replied_at': survey_data.get('repliedAt'),
+                    'response_status': survey_data.get('status'),
+                    'time_spent': survey_data.get('timeSpent'),
+                    'form_id': survey_data.get('form', {}).get('id') if isinstance(survey_data.get('form', {}),dict) else None,
+                    'form_field_id': answer.get('formField', {}).get('id') if isinstance(answer.get('formField', {}),dict) else None,
+                    'employee_id': survey_data.get('assignedTo', {}).get('id') if isinstance(survey_data.get('assignedTo', {}),dict) else None,
+                    'point_of_sale_id': survey_data.get('pointOfSale', {}).get('id') if isinstance(survey_data.get('pointOfSale', {}),dict) else None,
+                    'product_id': answer.get('sku', {}).get('id') if isinstance(answer.get('sku'),dict) else None,
+                    'response_value': answer.get('value'),
+                    'is_deleted': survey_data.get('deleted'),
+                    'updated_at_millis': survey_data.get('updatedAtMillis')
+                }
+                response_records.append(row)
+            return response_records
+
+        return self._paginated_request_with_timestamp(
+            url=request_url,
+            millis=millis,
+            fetch_func=fetch_func
+        )
     
     def get_employee_absences(self, start_date : Optional[str] = None) -> List[Dict[str,Any]]:
 
-        records = []
-        page = 1
+        request_url = f'{self.base_url}/v1/{self.environment}/employeeabsence/'
+        update_timestamp = round(time.time()*1000)
+        if start_date:
+            params = {'startDate' : start_date}
 
-        while True:         
-
-            request_url = f'{self.base_url}/v1/{self.environment}/employeeabsence?page={page}&size=200'
-
-            if start_date:
-                request_url += f'&startDate={start_date}'
-
-            response = super().request(method='GET',url=request_url,headers=self.headers,auth=self.auth)
-            response.raise_for_status()
-
-            items = response.json().get('items')
-            total_pages = response.json().get('totalPages')
-            update_timestamp = round(time.time()*1000)
-
-            if items:
-                for d in items:
-                    row = {
-
-                        'id' : d.get('id'),
-                        'employee_id' : d.get('employeeEnvironmentSuspended').get('id') if isinstance(d.get('employeeEnvironmentSuspended'),dict) else None,
-                        'start_date' : d.get('absenceStartDate'),
-                        'end_date' : d.get('absenceEndDate'),
-                        'absence_reason' : d.get('reasonNote'),
-                        'absence_note' : d.get('absenceNote'),
+        return self._paginated_request_with_page(
+                url=request_url,
+                params = params,
+                fetch_func = lambda x : {
+                        'id' : x.get('id'),
+                        'employee_id' : x.get('employeeEnvironmentSuspended',{}).get('id') if isinstance(x.get('employeeEnvironmentSuspended',{}),dict) else None,
+                        'start_date' : x.get('absenceStartDate'),
+                        'end_date' : x.get('absenceEndDate'),
+                        'absence_reason' : x.get('reasonNote'),
+                        'absence_note' : x.get('absenceNote'),
                         'updated_at_millis' : update_timestamp
                         }
-                    
-                    records.append(row)
-
-            if page >= total_pages:
-                break
-
-            page +=1
-
-        return records
-    
+                    )
