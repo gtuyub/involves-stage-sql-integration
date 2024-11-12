@@ -11,7 +11,7 @@ from models.tasks import create_db_engine, get_models_to_sync
 from config.settings import Config
 
 logging.basicConfig(level=logging.DEBUG, format="%(levelname)s - %(message)s")
-#logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @task(task_run_name = 'sincronizar-tabla-{model.__tablename__}')
