@@ -6,7 +6,7 @@ from typing import Type, Optional
 from models.base import Base
 from models.exceptions import SyncError
 from sqlalchemy.orm import sessionmaker
-from api_client.involves_api_client import InvolvesAPIClient
+from involves_api.client import InvolvesAPIClient
 from models.tasks import create_db_engine, get_models_to_sync
 from config.settings import Config
 
