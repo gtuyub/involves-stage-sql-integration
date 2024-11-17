@@ -1,4 +1,4 @@
-from .settings import Config
+from config.settings import Config
 from pathlib import Path
 import click
 from prefect.settings import get_current_settings

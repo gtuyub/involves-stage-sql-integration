@@ -2,10 +2,30 @@ from typing import Any, Dict, List, Union
 from .base import Base
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+import sqlalchemy.types as types
 from sqlalchemy import Column
 from sqlalchemy.types import Integer,String,Boolean, Date,DateTime, Float, BigInteger
 from involves_api.client import InvolvesAPIClient
 from datetime import datetime, timedelta
+
+
+class CustomString(types.TypeDecorator):
+    """Custom string type decorator which maps empty strings to NULL"""
+
+    impl = types.String
+    cache_ok = True
+
+    def process_bind_param(self,value,dialect):
+        if value == '' or value == ' ':
+            return None
+        return value
+    
+    def process_result_value(self, value, dialect):
+        return value
+    
+    def copy(self, **kw):
+        return CustomString(self.impl.length)
+
 
 
 class Visit(Base):
@@ -153,7 +173,7 @@ class FormResponse(Base):
     employee_id = Column(Integer)
     point_of_sale_id = Column(Integer)
     product_id = Column(Integer)
-    response_value = Column(String)
+    response_value = Column(CustomString)
     is_deleted = Column(Boolean)
     updated_at_millis = Column(BigInteger)
 
