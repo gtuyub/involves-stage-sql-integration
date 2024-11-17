@@ -3,7 +3,7 @@ from sqlalchemy import func, insert, update
 from sqlalchemy.types import Integer, BigInteger
 from typing import List,Dict,Any, Union
 from abc import abstractmethod, ABC
-from api_client.involves_api_client import InvolvesAPIClient
+from involves_api.client import InvolvesAPIClient
 from .exceptions import InsertOperationError, UpdateOperationError
 
 

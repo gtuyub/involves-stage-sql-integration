@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy import Column
 from sqlalchemy.types import Integer,String,Boolean, Date,DateTime, Float, BigInteger
-from api_client.involves_api_client import InvolvesAPIClient
+from involves_api.client import InvolvesAPIClient
 from datetime import datetime, timedelta
 
 
@@ -188,5 +188,4 @@ class EmployeeAbsence(Base):
     @classmethod
     def get_records_to_sync(cls, api_client: InvolvesAPIClient, db: Session) -> List[Dict[str, Any]]:
         return api_client.get_employee_absences(start_date=cls.get_last_sync_time(db))
-
 
