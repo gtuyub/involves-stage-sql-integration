@@ -42,7 +42,7 @@ deployments:
 - name: actualizar-db-involves-dkt
   version: null
   tags: []
-  description: Este 'deployment' sincroniza las tablas SQL de la base involves_dkt con datos del entorno 1 en Involves Stage.
+  description: Sincroniza las tablas SQL de la base involves_dkt con datos del entorno de promotoria en Involves Stage.
   schedule: {}
   flow_name:
   entrypoint: src/main.py:main
