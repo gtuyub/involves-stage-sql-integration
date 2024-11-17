@@ -5,9 +5,8 @@ import logging
 from typing import Optional, List, Dict, Any, Callable, Union, TypeVar
 T = TypeVar('T')
 
-logging.basicConfig(level=logging.INFO)  
 logger = logging.getLogger(__name__)
-logger.propagate = True
+logger.setLevel(logging.INFO)
 
 class InvolvesAPIClient(requests.Session):
     """A client for interacting with the Involves Stage API."""
@@ -31,7 +30,7 @@ class InvolvesAPIClient(requests.Session):
         logger.info(f'initialized involves_api_client at: \n env : {self.environment}. \n domain : {self.domain}.')
 
 
-    def _paginated_request_with_timestamp(self, url : str, start_millis : Optional[int], end_millis : Optional[int], params : Dict[str,Any] = None, fetch_func : Callable[[Dict[str,Any]], Union[T,List[T]]] = None) -> List[T]:
+    def _paginated_request_with_timestamp(self, url : str, start_millis : Optional[int] = None, end_millis : Optional[int] = None, params : Dict[str,Any] = None, fetch_func : Callable[[Dict[str,Any]], Union[T,List[T]]] = None) -> List[T]:
         """
         Get records modified or created on a specific interval in milliseconds from the provided API URL.
 
@@ -253,7 +252,7 @@ class InvolvesAPIClient(requests.Session):
                         }
                     )
 
-    def get_updated_products(self, start_millis : Optional[int], end_millis : Optional[int]) -> List[Dict[str,Any]]:
+    def get_updated_products(self, start_millis : Optional[int] = None, end_millis : Optional[int] = None) -> List[Dict[str,Any]]:
         """
         Get products updated after start_millis and before end_millis 
 
@@ -283,7 +282,7 @@ class InvolvesAPIClient(requests.Session):
             )
 
     
-    def get_updated_forms(self, millis : Optional[int]) -> Dict[str,List[Dict[str,Any]]]:
+    def get_updated_forms(self, millis : Optional[int] = None)  -> Dict[str,List[Dict[str,Any]]]:
         """
         Get forms updated after millis.
 
