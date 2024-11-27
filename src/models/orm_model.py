@@ -6,6 +6,7 @@ import sqlalchemy.types as types
 from sqlalchemy import Column
 from sqlalchemy.types import Integer,String,Boolean, Date,DateTime, Float, BigInteger
 from involves_api.client import InvolvesAPIClient
+from enum import Enum
 from datetime import datetime, timedelta
 
 
@@ -208,4 +209,22 @@ class EmployeeAbsence(Base):
     @classmethod
     def get_records_to_sync(cls, api_client: InvolvesAPIClient, db: Session) -> List[Dict[str, Any]]:
         return api_client.get_employee_absences(start_date=cls.get_last_sync_time(db))
+
+
+
+
+class Tables(str,Enum):
+
+    Employee = 'empleados'
+    Visit = 'visitas'
+    PointOfSale = 'puntos de venta'
+    Product = 'productos'
+    Form = 'formularios'
+    FormField = 'campos de formulario'
+    FormResponse = 'respuestas formularios'
+    EmployeeAbsence = 'ausencias de empleados'
+
+
+
+
 
