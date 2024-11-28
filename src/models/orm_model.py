@@ -165,9 +165,8 @@ class FormField(Base):
 class FormResponse(Base):
     __tablename__ = "form_response"
 
-    item_id = Column(Integer)
+    survey_id = Column(Integer)
     replied_at = Column(DateTime)
-    response_status = Column(String)
     time_spent = Column(BigInteger)
     form_id = Column(Integer)
     form_field_id = Column(Integer)

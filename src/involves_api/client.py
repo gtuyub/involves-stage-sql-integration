@@ -88,7 +88,7 @@ class InvolvesAPIClient(requests.Session):
 
         return records
     
-    def _paginated_request_with_page(self, url : str, params : Dict[str,Any], fetch_func : Callable[[Dict[str,Any]], Union[T,List[T]]] = None) -> List[T]:
+    def _paginated_request_with_page(self, url : str, params : Dict[str,Any] = None, fetch_func : Callable[[Dict[str,Any]], Union[T,List[T]]] = None) -> List[T]:
         """
         Get records from the provided API URL with pagination.
 
@@ -123,11 +123,16 @@ class InvolvesAPIClient(requests.Session):
 
             response_data : Dict = response.json()
 
-            items = response_data.get('items')
+            if 'items' in response_data:
+
+                items = response_data.get('items')
+
+            else:
+
+                items = response_data
+
             logger.info(f'request response includes {len(items)} items.')
 
-            total_pages = response_data.get('totalPages')
-            logger.info(f'page progress : {page}/{total_pages}')
 
             if items:
                 for item in items:
@@ -138,7 +143,12 @@ class InvolvesAPIClient(requests.Session):
                     else:
                         records.append(row)
 
-            if page >= total_pages:
+            
+            total_pages = response_data.get('totalPages') if isinstance(response_data,dict) else 1
+            logger.info(f'page progress : {page}/{total_pages}')
+                
+
+            if page >= total_pages or total_pages is None:
                 logger.info(f'Paginated request finished with a total of {len(records)} items.')
                 break
 
@@ -364,9 +374,8 @@ class InvolvesAPIClient(requests.Session):
             for answer in survey_data.get('surveyData'):
                 row = {
                     'id': answer.get('id'),
-                    'item_id': survey_data.get('id'),
+                    'survey_id': survey_data.get('id'),
                     'replied_at': survey_data.get('repliedAt'),
-                    'response_status': survey_data.get('status'),
                     'time_spent': survey_data.get('timeSpent'),
                     'form_id': survey_data.get('form', {}).get('id') if isinstance(survey_data.get('form', {}),dict) else None,
                     'form_field_id': answer.get('formField', {}).get('id') if isinstance(answer.get('formField', {}),dict) else None,
@@ -416,3 +425,41 @@ class InvolvesAPIClient(requests.Session):
                         'updated_at_millis' : update_timestamp
                         }
                     )
+    
+    def get_all_regions(self) -> List[Dict[str,Any]]:
+        """
+        Get a list of all regions defined on the specific environment.
+
+        Returns:
+        List[T]: A list of dictionaries representing regions.
+        """
+        request_url = f'{self.base_url}/v3/environments/{self.environment}/regionals/'
+
+        return self._paginated_request_with_page(
+                url=request_url,
+                fetch_func = lambda x : {
+
+                        'id' : x.get('id'),
+                        'regional_name' : x.get('name'),
+                        'macroregional_id' : x.get('macroregional',{}).get('id') if isinstance(x.get('macroregional'),dict) else None
+                }
+            )
+    
+
+    def get_all_macroregions(self) -> List[Dict[str,Any]]:
+        """
+        Get a list of all macroregions defined on the specific environment.
+
+        Returns:
+        List[T]: A list of dicionaries representing macroregions.
+        """
+
+        request_url = f'{self.base_url}/v1/{self.environment}/macroregion/find'
+
+        return self._paginated_request_with_page(
+            url=request_url
+        )
+    
+
+
+
